@@ -76,7 +76,7 @@ int main(void)
         return 1;
     }
 
-    printf("Connected to RemoteOps Agent.\n");
+    printf("Connected to Agent at %s:%d\n", SERVER_IP, PORT);
 
     while (1)
     {

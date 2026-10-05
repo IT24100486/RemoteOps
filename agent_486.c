@@ -4,10 +4,17 @@
 #include <unistd.h>
 #include <arpa/inet.h>
 #include <sys/socket.h>
+#include <sys/sysinfo.h>
+#include <sys/statvfs.h>
+#include <time.h>
+#include <pwd.h>
 
 #define PORT 9410
 #define AUTH_TOKEN "OPS-0486"
 #define SID "6840"
+
+#define MAX_BUFFER 4096
+#define MAX_PROCESSES 20
 
 int recv_line(int sock_fd, char *buffer, size_t buffer_size)
 {
@@ -41,6 +48,254 @@ int recv_line(int sock_fd, char *buffer, size_t buffer_size)
     return 1;
 }
 
+int send_all(int sock_fd, const char *data, size_t length)
+{
+    size_t total_sent = 0;
+
+    while (total_sent < length)
+    {
+        ssize_t bytes_sent = send(sock_fd,
+                                  data + total_sent,
+                                  length - total_sent,
+                                  0);
+
+        if (bytes_sent < 0)
+        {
+            return -1;
+        }
+
+        total_sent += bytes_sent;
+    }
+
+    return 0;
+}
+
+int send_response(int sock_fd, const char *response)
+{
+    return send_all(sock_fd, response, strlen(response));
+}
+
+int get_sysinfo(char *output, size_t output_size)
+{
+    struct sysinfo info;
+
+    if (sysinfo(&info) != 0)
+    {
+        return -1;
+    }
+
+    FILE *load_file = fopen("/proc/loadavg", "r");
+
+    if (load_file == NULL)
+    {
+        return -1;
+    }
+
+    double cpu_load;
+
+    if (fscanf(load_file, "%lf", &cpu_load) != 1)
+    {
+        fclose(load_file);
+        return -1;
+    }
+
+    fclose(load_file);
+
+    unsigned long long total_memory =
+        (unsigned long long)info.totalram * info.mem_unit;
+
+    unsigned long long free_memory =
+        (unsigned long long)info.freeram * info.mem_unit;
+
+    unsigned long long used_memory =
+        total_memory - free_memory;
+
+    unsigned long long used_memory_mb =
+        used_memory / (1024ULL * 1024ULL);
+
+    snprintf(output,
+             output_size,
+             "OK SYSINFO %.2f %llu %ld SID:%s\n",
+             cpu_load,
+             used_memory_mb,
+             info.uptime,
+             SID);
+
+    return 0;
+}
+
+int get_process_list(char *output, size_t output_size)
+{
+    FILE *process_file = popen("ps -eo pid=,comm=", "r");
+
+    if (process_file == NULL)
+    {
+        return -1;
+    }
+
+    char line[256];
+    size_t used = 0;
+    int process_count = 0;
+
+    used += snprintf(output + used,
+                     output_size - used,
+                     "OK PROCS ");
+
+    while (fgets(line, sizeof(line), process_file) != NULL &&
+           process_count < MAX_PROCESSES)
+    {
+        int pid;
+        char process_name[128];
+
+        if (sscanf(line, "%d %127s", &pid, process_name) != 2)
+        {
+            continue;
+        }
+
+        int written;
+
+        if (process_count > 0)
+        {
+            written = snprintf(output + used,
+                               output_size - used,
+                               ",");
+            used += written;
+        }
+
+        written = snprintf(output + used,
+                           output_size - used,
+                           "%s/%d",
+                           process_name,
+                           pid);
+
+        used += written;
+        process_count++;
+
+        if (used >= output_size - 100)
+        {
+            break;
+        }
+    }
+
+    pclose(process_file);
+
+    snprintf(output + used,
+             output_size - used,
+             " SID:%s\n",
+             SID);
+
+    return 0;
+}
+
+int execute_command(const char *command,
+                    char *output,
+                    size_t output_size)
+{
+    if (strcmp(command, "DATE") == 0)
+    {
+        time_t current_time = time(NULL);
+        struct tm local_time;
+
+        if (localtime_r(&current_time, &local_time) == NULL)
+        {
+            return -1;
+        }
+
+        strftime(output,
+                 output_size,
+                 "%Y-%m-%d %H:%M:%S",
+                 &local_time);
+
+        return 0;
+    }
+
+    if (strcmp(command, "UPTIME") == 0)
+    {
+        struct sysinfo info;
+
+        if (sysinfo(&info) != 0)
+        {
+            return -1;
+        }
+
+        snprintf(output,
+                 output_size,
+                 "%ld seconds",
+                 info.uptime);
+
+        return 0;
+    }
+
+    if (strcmp(command, "DISKFREE") == 0)
+    {
+        struct statvfs disk_info;
+
+        if (statvfs(".", &disk_info) != 0)
+        {
+            return -1;
+        }
+
+        unsigned long long free_bytes =
+            (unsigned long long)disk_info.f_bavail *
+            disk_info.f_frsize;
+
+        unsigned long long free_mb =
+            free_bytes / (1024ULL * 1024ULL);
+
+        snprintf(output,
+                 output_size,
+                 "%llu MB",
+                 free_mb);
+
+        return 0;
+    }
+
+    if (strcmp(command, "HOSTNAME") == 0)
+    {
+        char hostname[256];
+
+        if (gethostname(hostname, sizeof(hostname)) != 0)
+        {
+            return -1;
+        }
+
+        hostname[sizeof(hostname) - 1] = '\0';
+
+        snprintf(output,
+                 output_size,
+                 "%s",
+                 hostname);
+
+        return 0;
+    }
+
+    if (strcmp(command, "WHOAMI") == 0)
+    {
+        struct passwd password_entry;
+        struct passwd *result = NULL;
+        char password_buffer[1024];
+
+        if (getpwuid_r(geteuid(),
+                       &password_entry,
+                       password_buffer,
+                       sizeof(password_buffer),
+                       &result) != 0 ||
+            result == NULL)
+        {
+            return -1;
+        }
+
+        snprintf(output,
+                 output_size,
+                 "%s",
+                 password_entry.pw_name);
+
+        return 0;
+    }
+
+    return 1;
+}
+
 int main(void)
 {
     int server_fd;
@@ -50,7 +305,9 @@ int main(void)
     struct sockaddr_in client_addr;
     socklen_t client_len = sizeof(client_addr);
 
-    char buffer[1024];
+    char buffer[MAX_BUFFER];
+    char response[MAX_BUFFER];
+    char command_output[2048];
 
     server_fd = socket(AF_INET, SOCK_STREAM, 0);
 
@@ -66,7 +323,8 @@ int main(void)
     server_addr.sin_addr.s_addr = INADDR_ANY;
     server_addr.sin_port = htons(PORT);
 
-    if (bind(server_fd, (struct sockaddr *)&server_addr,
+    if (bind(server_fd,
+             (struct sockaddr *)&server_addr,
              sizeof(server_addr)) < 0)
     {
         perror("bind");
@@ -100,7 +358,9 @@ int main(void)
 
     while (1)
     {
-        int result = recv_line(client_fd, buffer, sizeof(buffer));
+        int result = recv_line(client_fd,
+                               buffer,
+                               sizeof(buffer));
 
         if (result == 0)
         {
@@ -114,40 +374,159 @@ int main(void)
             break;
         }
 
-        if (!authenticated)
+	if (!authenticated)
+{
+    if (strcmp(buffer, "AUTH " AUTH_TOKEN "\n") == 0)
+    {
+        snprintf(response,
+                 sizeof(response),
+                 "OK AUTHENTICATED SID:%s\n",
+                 SID);
+
+        send_response(client_fd, response);
+
+        authenticated = 1;
+
+        printf("Controller authenticated successfully.\n");
+    }
+    else if (strncmp(buffer, "AUTH ", 5) == 0)
+    {
+        snprintf(response,
+                 sizeof(response),
+                 "ERR 001 AUTH_FAILED SID:%s\n",
+                 SID);
+
+        send_response(client_fd, response);
+
+        printf("Authentication failed.\n");
+    }
+    else
+    {
+        snprintf(response,
+                 sizeof(response),
+                 "ERR 003 AUTH_REQUIRED SID:%s\n",
+                 SID);
+
+        send_response(client_fd, response);
+
+        printf("Command rejected before authentication.\n");
+    }
+
+    continue;
+}
+        if (strcmp(buffer, "SYSINFO\n") == 0)
         {
-            if (strcmp(buffer, "AUTH OPS-0486\n") == 0)
+            if (get_sysinfo(response, sizeof(response)) == 0)
             {
-                const char *response =
-                    "OK AUTHENTICATED SID:6840\n";
-
-                send(client_fd, response, strlen(response), 0);
-
-                authenticated = 1;
-
-                printf("Controller authenticated successfully.\n");
+                send_response(client_fd, response);
             }
             else
             {
-                const char *response =
-                    "ERR 001 AUTH_FAILED SID:6840\n";
+                snprintf(response,
+                         sizeof(response),
+                         "ERR 006 SYSINFO_FAILED SID:%s\n",
+                         SID);
 
-                send(client_fd, response, strlen(response), 0);
-
-                printf("Authentication failed.\n");
-
-                break;
+                send_response(client_fd, response);
             }
+
+            continue;
         }
-        else
+
+        if (strcmp(buffer, "LISTPROC\n") == 0)
         {
-            printf("Received command: %s", buffer);
+            if (get_process_list(response, sizeof(response)) == 0)
+            {
+                send_response(client_fd, response);
+            }
+            else
+            {
+                snprintf(response,
+                         sizeof(response),
+                         "ERR 007 PROCESS_LIST_FAILED SID:%s\n",
+                         SID);
 
-            const char *response =
-                "ERR 003 AUTH_REQUIRED SID:6840\n";
+                send_response(client_fd, response);
+            }
 
-            send(client_fd, response, strlen(response), 0);
+            continue;
         }
+
+	if (strncmp(buffer, "EXEC ", 5) == 0)
+{
+    char exec_name[128];
+    char extra_argument[128];
+
+    int argument_count = sscanf(buffer + 5,
+                                "%127s %127s",
+                                exec_name,
+                                extra_argument);
+
+    if (argument_count != 1)
+    {
+        snprintf(response,
+                 sizeof(response),
+                 "ERR 002 COMMAND_NOT_ALLOWED SID:%s\n",
+                 SID);
+
+        send_response(client_fd, response);
+        continue;
+    }
+
+    int exec_result = execute_command(exec_name,
+                                      command_output,
+                                      sizeof(command_output));
+
+    if (exec_result == 1)
+    {
+        snprintf(response,
+                 sizeof(response),
+                 "ERR 002 COMMAND_NOT_ALLOWED SID:%s\n",
+                 SID);
+
+        send_response(client_fd, response);
+    }
+    else if (exec_result < 0)
+    {
+        snprintf(response,
+                 sizeof(response),
+                 "ERR 008 EXEC_FAILED SID:%s\n",
+                 SID);
+
+        send_response(client_fd, response);
+    }
+    else
+    {
+        snprintf(response,
+                 sizeof(response),
+                 "OK EXEC_RESULT %s SID:%s\n",
+                 command_output,
+                 SID);
+
+        send_response(client_fd, response);
+    }
+
+    continue;
+}
+        if (strcmp(buffer, "QUIT\n") == 0)
+        {
+            snprintf(response,
+                     sizeof(response),
+                     "OK BYE SID:%s\n",
+                     SID);
+
+            send_response(client_fd, response);
+
+            printf("Controller requested disconnect.\n");
+            break;
+        }
+
+        snprintf(response,
+                 sizeof(response),
+                 "ERR 009 UNKNOWN_COMMAND SID:%s\n",
+                 SID);
+
+        send_response(client_fd, response);
     }
 
     close(client_fd);

@@ -6,6 +6,7 @@ This log records substantive AI interactions that materially contributed to the 
 |---|---|---|---|
 | 2026-10-05 | ChatGPT | Helped interpret the RemoteOps assignment requirements and organize the development, testing, documentation, and process evidence. | Used to plan incremental development stages and keep the implementation aligned with the assignment requirements. |
 | 2026-10-05 | ChatGPT | Explained Git/GitHub project setup and HTTPS authentication for pushing the project from CentOS. | Followed the guidance, configured the repository, and verified that the initial project commit was successfully pushed to GitHub. |
+| 2026-10-06 | ChatGPT | Helped implement SYSINFO, LISTPROC and the EXEC whitelist, including pre-authentication rejection and TCP response handling. | Reviewed, compiled and tested the implementation; identified and fixed acceptance of extra EXEC arguments. |
 
 ## Future entries
 

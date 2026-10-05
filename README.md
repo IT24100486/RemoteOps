@@ -1,6 +1,7 @@
 # RemoteOps — IE3090 Network Programming
 
 ## Student Information
+
 - Registration Number: IT24100486
 - Agent Port: 9410
 - Session ID (SID): 6840
@@ -11,18 +12,32 @@
 - Storage Path: ./agentfiles/IT24100486/
 
 ## Project Overview
-RemoteOps is a TCP/IP remote system monitoring and management tool consisting of an Agent (server) and a Controller (client), with UDP used for periodic monitoring data.
+
+RemoteOps is a TCP/IP remote system monitoring and management tool consisting of an Agent (server) and a Controller (client). UDP monitoring will be added for periodic monitoring data.
 
 The implementation follows the communication protocol specified in the IE3090 assignment brief.
 
-## Current Status
-Project structure and GitHub repository initialized. Implementation and testing will be added incrementally.
+## Current Implementation Status
 
-## Build and Run
-Build instructions will be added after the Makefile and initial implementation are completed and tested.
+The following TCP functionality has been implemented and tested:
 
-## Features
-Implementation details will be updated as the required RemoteOps features are completed and tested.
+- TCP Agent/Controller connection
+- Authentication using the personalised token
+- Personalised Session ID (SID)
+- Persistent TCP command session
+- Line-based TCP command handling
+- SYSINFO
+- LISTPROC
+- EXEC command whitelist
+- Pre-authentication command rejection
+- EXEC argument validation
+- Graceful QUIT handling
 
-## Development Process
-The project is developed incrementally using Git. The design diary records significant technical decisions and obstacles encountered during development.
+### Allowed EXEC Commands
+
+```text
+EXEC DATE
+EXEC UPTIME
+EXEC DISKFREE
+EXEC HOSTNAME
+EXEC WHOAMI
