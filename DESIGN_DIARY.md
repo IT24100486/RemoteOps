@@ -69,3 +69,15 @@ PUT and GET file transfer functionality is working correctly with the personalis
 
 ### Next step
 Implement concurrent Controller handling using POSIX threads.
+
+## Concurrency Implementation
+
+The Agent was initially implemented as a single-client TCP server, where the main process accepted one Controller connection and handled its complete session before closing the connection. This design could not satisfy the requirement to support at least five simultaneous Controllers.
+
+POSIX pthreads were selected for concurrency because the course material covers multithreaded client-server programming and pthreads provide a straightforward thread-per-Controller model. The main Agent thread now continuously accepts incoming TCP connections and creates a separate worker thread for each connected Controller.
+
+The existing authentication and command-handling logic was moved into the per-client worker function without changing the application protocol. Each worker maintains its own client socket, buffers, command output buffer, and authentication state. Detached worker threads allow the main Agent to immediately continue accepting new connections.
+
+The implementation was compiled successfully with GCC and tested first with one Controller to verify that the existing functionality remained intact. A final concurrency test was then performed using five simultaneous Controller instances. All five Controllers successfully authenticated with the personalised token and independently processed commands while connected to TCP port 9410. The `ss` command confirmed five established TCP connections to the Agent.
+
+Result: PASS — the Agent successfully supports at least five simultaneous Controller connections.

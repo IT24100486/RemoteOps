@@ -39,6 +39,18 @@ The following functionality has been implemented and tested:
 - Personalised file storage
 - Filename/path validation for uploaded files
 - Graceful QUIT handling
+- Concurrent Controller handling using POSIX pthreads
+- One worker thread per connected Controller
+- Support for at least five simultaneous Controller connections
+- Five-Controller concurrency testing completed successfully
+
+## Concurrency Model
+
+The RemoteOps Agent uses a thread-per-Controller concurrency model implemented with POSIX pthreads.
+
+The main Agent thread continuously accepts incoming TCP connections. For each connected Controller, a separate worker thread is created to handle authentication, commands, file transfers, and session management. Worker threads are detached so that the main Agent can immediately return to accepting new connections.
+
+The concurrency implementation was tested with five simultaneous Controller instances. All five Controllers successfully authenticated using the personalised token and independently processed commands while connected to the Agent on TCP port 9410.
 
 ## Allowed EXEC Commands
 
