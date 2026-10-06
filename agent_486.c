@@ -669,6 +669,137 @@ if (strncmp(buffer, "PUT ", 4) == 0)
 
     send_response(client_fd, response);
     continue;
+}
+
+/*
+ * GET <filename>
+ *
+ * Send the requested file from the Agent to the Controller.
+ * The response header is sent first, followed immediately
+ * by exactly the number of raw bytes specified in the header.
+ */
+if (strncmp(buffer, "GET ", 4) == 0)
+{
+    char filename[128];
+    char extra_argument[128];
+
+    int argument_count = sscanf(buffer + 4,
+                                "%127s %127s",
+                                filename,
+                                extra_argument);
+
+    if (argument_count != 1)
+    {
+        send_response(client_fd,
+                      "ERR 010 INVALID_FILE_REQUEST SID:" SID "\n");
+        continue;
+    }
+
+    /*
+     * Validate filename so the requested file stays
+     * inside the personalised agent storage directory.
+     */
+    if (filename[0] == '\0' ||
+        strcmp(filename, ".") == 0 ||
+        strcmp(filename, "..") == 0 ||
+        strchr(filename, '/') != NULL ||
+        strchr(filename, '\\') != NULL)
+    {
+        send_response(client_fd,
+                      "ERR 010 INVALID_FILE_REQUEST SID:" SID "\n");
+        continue;
+    }
+
+    char filepath[512];
+
+    snprintf(filepath,
+             sizeof(filepath),
+             "./agentfiles/IT24100486/%s",
+             filename);
+
+    FILE *file = fopen(filepath, "rb");
+
+    if (file == NULL)
+    {
+        send_response(client_fd,
+                      "ERR 005 FILE_NOT_FOUND SID:" SID "\n");
+        continue;
+    }
+
+    /*
+     * Determine the exact file size before sending
+     * the response header.
+     */
+    if (fseek(file, 0, SEEK_END) != 0)
+    {
+        fclose(file);
+
+        send_response(client_fd,
+                      "ERR 010 INVALID_FILE_REQUEST SID:" SID "\n");
+        continue;
+    }
+
+    long file_size = ftell(file);
+
+    if (file_size < 0)
+    {
+        fclose(file);
+
+        send_response(client_fd,
+                      "ERR 010 INVALID_FILE_REQUEST SID:" SID "\n");
+        continue;
+    }
+
+    rewind(file);
+
+    char response[256];
+
+    snprintf(response,
+             sizeof(response),
+             "OK FILE_SEND %s %ld SID:%s\n",
+             filename,
+             file_size,
+             SID);
+
+    if (send_response(client_fd, response) != 0)
+    {
+        fclose(file);
+        break;
+    }
+
+    /*
+     * Send exactly the file contents after the header.
+     * TCP may split the data into multiple packets, so
+     * send_all() is used for every chunk.
+     */
+    unsigned char file_buffer[4096];
+    size_t bytes_read;
+    int send_success = 1;
+
+    while ((bytes_read = fread(file_buffer,
+                               1,
+                               sizeof(file_buffer),
+                               file)) > 0)
+    {
+        if (send_all(client_fd,
+                    (const char *)file_buffer,
+                     bytes_read) != 0)
+        {
+            send_success = 0;
+            break;
+        }
+    }
+
+    int read_error = ferror(file);
+
+    fclose(file);
+
+    if (!send_success || read_error)
+    {
+        break;
+    }
+
+    continue;
 } 
 
        if (strcmp(buffer, "QUIT\n") == 0)

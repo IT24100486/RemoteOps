@@ -15,7 +15,7 @@
 
 RemoteOps is a TCP/IP remote system monitoring and management tool consisting of an Agent (server) and a Controller (client).
 
-The Agent provides remote system information, process listing, restricted command execution and file upload functionality. UDP monitoring and additional management features will be implemented in later development stages.
+The Agent provides remote system information, process listing, restricted command execution, file upload and file download functionality. UDP monitoring and additional management features will be implemented in later development stages.
 
 The implementation follows the communication protocol specified in the IE3090 assignment brief.
 
@@ -34,6 +34,8 @@ The following functionality has been implemented and tested:
 - Pre-authentication command rejection
 - EXEC argument validation
 - PUT file upload with exact byte-count transfer
+- GET file download with exact byte-count transfer
+- GET file-not-found error handling
 - Personalised file storage
 - Filename/path validation for uploaded files
 - Graceful QUIT handling

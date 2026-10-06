@@ -8,6 +8,7 @@ This log records substantive AI interactions that materially contributed to the 
 | 2026-10-05 | ChatGPT | Explained Git/GitHub project setup and HTTPS authentication for pushing the project from CentOS. | Followed the guidance, configured the repository, and verified that the initial project commit was successfully pushed to GitHub. |
 | 2026-10-06 | ChatGPT | Helped implement SYSINFO, LISTPROC and the EXEC whitelist, including pre-authentication rejection and TCP response handling. | Reviewed, compiled and tested the implementation; identified and fixed acceptance of extra EXEC arguments. |
 | 2026-10-06 | ChatGPT | Helped implement TCP PUT file upload in the Agent and Controller, including exact byte-count handling and personalised storage. | Reviewed the code, compiled both programs, tested a 37-byte upload, and verified the uploaded file using `cmp` and SHA-256 hashes. |
+| 2026-10-06 | ChatGPT | Helped implement TCP GET file download in the Agent and Controller, including exact byte-count handling and file-not-found handling. | Reviewed the code, compiled both programs with `-Wall -Wextra`, tested a 37-byte download, verified the downloaded file using `cmp` and SHA-256, and tested the missing-file error response. |
 
 ## Future entries
 

@@ -320,6 +320,189 @@ int main(void)
         }
 
         /*
+         * Handle GET separately because GET is followed
+         * by raw file bytes from the Agent.
+         */
+        if (strncmp(buffer, "GET ", 4) == 0)
+        {
+            char filename[128];
+            char extra_argument[128];
+
+            int argument_count = sscanf(buffer + 4,
+                                        "%127s %127s",
+                                        filename,
+                                        extra_argument);
+
+            /*
+             * GET must contain exactly:
+             * GET <filename>
+             */
+            if (argument_count != 1)
+            {
+                printf("Usage: GET <filename>\n");
+                continue;
+            }
+
+            /*
+             * Send the GET command to the Agent.
+             */
+            if (send_all(sock_fd,
+                         buffer,
+                         strlen(buffer)) != 0)
+            {
+                printf("Failed to send GET command.\n");
+                break;
+            }
+
+            /*
+             * Receive the Agent response header.
+             */
+            int result = recv_line(sock_fd,
+                                   buffer,
+                                   sizeof(buffer));
+
+            if (result == 0)
+            {
+                printf("Connection closed by Agent.\n");
+                break;
+            }
+
+            if (result < 0)
+            {
+                perror("recv");
+                break;
+            }
+
+            /*
+             * Check whether the requested file exists.
+             */
+            if (strncmp(buffer, "ERR 005 FILE_NOT_FOUND", 22) == 0)
+            {
+                printf("%s", buffer);
+                continue;
+            }
+
+            /*
+             * Parse:
+             * OK FILE_SEND <filename> <filesize> SID:6840
+             */
+            char response_filename[128];
+            unsigned long long filesize;
+            char sid[32];
+
+            int parsed = sscanf(buffer,
+                                "OK FILE_SEND %127s %llu SID:%31s",
+                                response_filename,
+                                &filesize,
+                                sid);
+
+            if (parsed != 3)
+            {
+                printf("%s", buffer);
+                continue;
+            }
+
+            printf("%s", buffer);
+
+            /*
+             * Save the received file locally.
+             */
+            FILE *file = fopen(response_filename, "wb");
+
+            if (file == NULL)
+            {
+                perror("fopen");
+                break;
+            }
+
+            unsigned char file_buffer[4096];
+            unsigned long long remaining = filesize;
+            int transfer_success = 1;
+
+            /*
+             * Receive exactly the number of bytes
+             * specified by the Agent.
+             */
+            while (remaining > 0)
+            {
+                size_t chunk_size;
+
+                if (remaining > sizeof(file_buffer))
+                {
+                    chunk_size = sizeof(file_buffer);
+                }
+                else
+                {
+                    chunk_size = (size_t)remaining;
+                }
+
+                size_t total_received = 0;
+
+                while (total_received < chunk_size)
+                {
+                    ssize_t received = recv(sock_fd,
+                                            file_buffer + total_received,
+                                            chunk_size - total_received,
+                                            0);
+
+                    if (received < 0)
+                    {
+                        if (errno == EINTR)
+                        {
+                            continue;
+                        }
+
+                        perror("recv");
+                        transfer_success = 0;
+                        break;
+                    }
+
+                    if (received == 0)
+                    {
+                        printf("Connection closed during file transfer.\n");
+                        transfer_success = 0;
+                        break;
+                    }
+
+                    total_received += (size_t)received;
+                }
+
+                if (!transfer_success)
+                {
+                    break;
+                }
+
+                size_t written = fwrite(file_buffer,
+                                        1,
+                                        chunk_size,
+                                        file);
+
+                if (written != chunk_size)
+                {
+                    perror("fwrite");
+                    transfer_success = 0;
+                    break;
+                }
+
+                remaining -= chunk_size;
+            }
+
+            fclose(file);
+
+            if (!transfer_success)
+            {
+                remove(response_filename);
+                break;
+            }
+
+            printf("File received successfully: %s (%llu bytes)\n",
+                   response_filename,
+                   filesize);
+
+            continue;
+        }
+
+        /*
          * Normal text commands.
          *
          * send_all() is used instead of send() so that

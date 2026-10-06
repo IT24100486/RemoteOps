@@ -49,19 +49,23 @@ The SYSINFO, LISTPROC, EXEC and authentication-protection functionality is worki
 
 ### Next step
 
-Implement TCP file upload using the PUT protocol with exact byte-count handling and personalised file storage.
+Implement TCP file transfer using the PUT and GET protocols.
 
-## 2026-10-06 — PUT File Upload
+## 2026-10-06 — File Transfer (PUT and GET)
 
 ### Key decisions
-- Implemented PUT in both Agent and Controller using chunked TCP transfer.
-- Added exact byte-count handling so the Agent receives the declared file size correctly.
-- Uploaded files are stored under `./agentfiles/IT24100486/`.
-- Added basic filename validation and a 100 MiB implementation limit.
+- Implemented PUT and GET in both Agent and Controller using chunked TCP transfer.
+- Added exact byte-count handling for file uploads and downloads.
+- Files are stored under the personalised `./agentfiles/IT24100486/` directory.
+- Added filename validation and GET `FILE_NOT_FOUND` handling.
 
 ### Testing
-- Tested a 37-byte `put_test.txt` upload successfully.
-- Verified the uploaded file using `cmp` and matching SHA-256 hashes.
+- Successfully uploaded and downloaded the 37-byte `put_test.txt` file.
+- Verified byte-for-byte integrity using `cmp` and matching SHA-256 hashes.
+- Tested a missing file and received `ERR 005 FILE_NOT_FOUND SID:6840`.
+
+### Result
+PUT and GET file transfer functionality is working correctly with the personalised protocol values.
 
 ### Next step
-Implement GET file download.
+Implement concurrent Controller handling using POSIX threads.
