@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <errno.h>
 #include <arpa/inet.h>
 #include <sys/socket.h>
 #include <sys/sysinfo.h>
@@ -44,6 +45,39 @@ int recv_line(int sock_fd, char *buffer, size_t buffer_size)
     }
 
     buffer[i] = '\0';
+
+    return 1;
+}
+
+int recv_exact(int sock_fd, void *buffer, size_t length)
+{
+    size_t total_received = 0;
+    char *ptr = (char *)buffer;
+
+    while (total_received < length)
+    {
+        ssize_t received = recv(sock_fd,
+                                ptr + total_received,
+                                length - total_received,
+                                0);
+
+        if (received == 0)
+        {
+            return 0;
+        }
+
+        if (received < 0)
+        {
+            if (errno == EINTR)
+            {
+                continue;
+            }
+
+            return -1;
+        }
+
+        total_received += (size_t)received;
+    }
 
     return 1;
 }
@@ -508,7 +542,136 @@ int main(void)
 
     continue;
 }
-        if (strcmp(buffer, "QUIT\n") == 0)
+
+if (strncmp(buffer, "PUT ", 4) == 0)
+{
+    char filename[128];
+    char extra_argument[128];
+    unsigned long long filesize;
+
+    int argument_count = sscanf(buffer + 4,
+                                "%127s %llu %127s",
+                                filename,
+                                &filesize,
+                                extra_argument);
+
+    if (argument_count != 2)
+    {
+        send_response(client_fd,
+                      "ERR 010 INVALID_FILE_REQUEST SID:" SID "\n");
+        continue;
+    }
+
+    /*
+     * Simple filename validation.
+     * Uploaded files must stay inside the personalised
+     * agentfiles/IT24100486 directory.
+     */
+    if (filename[0] == '\0' ||
+        strcmp(filename, ".") == 0 ||
+        strcmp(filename, "..") == 0 ||
+        strchr(filename, '/') != NULL ||
+        strchr(filename, '\\') != NULL)
+    {
+        send_response(client_fd,
+                      "ERR 010 INVALID_FILE_REQUEST SID:" SID "\n");
+        continue;
+    }
+
+    /*
+     * Implementation safety limit.
+     * The assignment requires FILE_TOO_LARGE handling but
+     * does not specify a numeric maximum, so 100 MiB is
+     * used as an implementation decision.
+     */
+    const unsigned long long MAX_FILE_SIZE =
+        100ULL * 1024ULL * 1024ULL;
+
+    if (filesize > MAX_FILE_SIZE)
+    {
+        send_response(client_fd,
+                      "ERR 004 FILE_TOO_LARGE SID:" SID "\n");
+        continue;
+    }
+
+    char filepath[512];
+
+    snprintf(filepath,
+             sizeof(filepath),
+             "./agentfiles/IT24100486/%s",
+             filename);
+
+    FILE *file = fopen(filepath, "wb");
+
+    if (file == NULL)
+    {
+        send_response(client_fd,
+                      "ERR 010 INVALID_FILE_REQUEST SID:" SID "\n");
+        continue;
+    }
+
+    unsigned char file_buffer[4096];
+    unsigned long long remaining = filesize;
+    int transfer_success = 1;
+
+    while (remaining > 0)
+    {
+        size_t chunk_size;
+
+        if (remaining > sizeof(file_buffer))
+        {
+            chunk_size = sizeof(file_buffer);
+        }
+        else
+        {
+            chunk_size = (size_t)remaining;
+        }
+
+        int result = recv_exact(client_fd,
+                                file_buffer,
+                                chunk_size);
+
+        if (result != 1)
+        {
+            transfer_success = 0;
+            break;
+        }
+
+        size_t written = fwrite(file_buffer,
+                                1,
+                                chunk_size,
+                                file);
+
+        if (written != chunk_size)
+        {
+            transfer_success = 0;
+            break;
+        }
+
+        remaining -= chunk_size;
+    }
+
+    fclose(file);
+
+    if (!transfer_success)
+    {
+        remove(filepath);
+        break;
+    }
+
+    char response[256];
+
+    snprintf(response,
+             sizeof(response),
+             "OK FILE_RECEIVED %s SID:%s\n",
+             filename,
+             SID);
+
+    send_response(client_fd, response);
+    continue;
+} 
+
+       if (strcmp(buffer, "QUIT\n") == 0)
         {
             snprintf(response,
                      sizeof(response),

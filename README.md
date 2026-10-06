@@ -13,13 +13,15 @@
 
 ## Project Overview
 
-RemoteOps is a TCP/IP remote system monitoring and management tool consisting of an Agent (server) and a Controller (client). UDP monitoring will be added for periodic monitoring data.
+RemoteOps is a TCP/IP remote system monitoring and management tool consisting of an Agent (server) and a Controller (client).
+
+The Agent provides remote system information, process listing, restricted command execution and file upload functionality. UDP monitoring and additional management features will be implemented in later development stages.
 
 The implementation follows the communication protocol specified in the IE3090 assignment brief.
 
 ## Current Implementation Status
 
-The following TCP functionality has been implemented and tested:
+The following functionality has been implemented and tested:
 
 - TCP Agent/Controller connection
 - Authentication using the personalised token
@@ -31,9 +33,14 @@ The following TCP functionality has been implemented and tested:
 - EXEC command whitelist
 - Pre-authentication command rejection
 - EXEC argument validation
+- PUT file upload with exact byte-count transfer
+- Personalised file storage
+- Filename/path validation for uploaded files
 - Graceful QUIT handling
 
-### Allowed EXEC Commands
+## Allowed EXEC Commands
+
+The EXEC command supports exactly the following commands:
 
 ```text
 EXEC DATE

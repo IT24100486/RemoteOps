@@ -48,4 +48,20 @@ The core command set was tested through one persistent Controller session. The t
 The SYSINFO, LISTPROC, EXEC and authentication-protection functionality is working with the personalised protocol values for IT24100486.
 
 ### Next step
+
 Implement TCP file upload using the PUT protocol with exact byte-count handling and personalised file storage.
+
+## 2026-10-06 — PUT File Upload
+
+### Key decisions
+- Implemented PUT in both Agent and Controller using chunked TCP transfer.
+- Added exact byte-count handling so the Agent receives the declared file size correctly.
+- Uploaded files are stored under `./agentfiles/IT24100486/`.
+- Added basic filename validation and a 100 MiB implementation limit.
+
+### Testing
+- Tested a 37-byte `put_test.txt` upload successfully.
+- Verified the uploaded file using `cmp` and matching SHA-256 hashes.
+
+### Next step
+Implement GET file download.
