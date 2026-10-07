@@ -1,0 +1,26 @@
+[2026-10-07 14:45:23] Controller connected successfully.
+[2026-10-07 14:45:41] Controller authenticated successfully.
+[2026-10-07 14:45:45] SYSINFO
+
+[2026-10-07 14:45:48] EXEC DATE
+
+[2026-10-07 14:45:55] MONITOR START 9500
+
+[2026-10-07 14:45:55] MONITOR STARTED
+[2026-10-07 14:46:08] MONITOR STOP
+
+[2026-10-07 14:46:08] MONITOR STOPPED
+[2026-10-07 14:46:15] QUIT
+
+[2026-10-07 14:46:15] Controller disconnected.
+[2026-10-07 14:52:46] Controller connected successfully.
+[2026-10-07 14:52:57] Controller authenticated successfully.
+[2026-10-07 14:53:39] PUT put_test.txt 37
+
+[2026-10-07 14:53:39] PUT completed: put_test.txt (37 bytes)
+[2026-10-07 14:53:50] GET put_test.txt
+
+[2026-10-07 14:53:50] GET completed: put_test.txt (37 bytes)
+[2026-10-07 14:53:59] QUIT
+
+[2026-10-07 14:53:59] Controller disconnected.

@@ -21,6 +21,36 @@
 #define MAX_BUFFER 4096
 #define MAX_PROCESSES 20
 
+#define LOG_FILE "remoteops_IT24100486.log"
+
+void write_log(const char *message)
+{
+    FILE *log_file = fopen(LOG_FILE, "a");
+
+    if (log_file == NULL)
+    {
+        return;
+    }
+
+    time_t current_time = time(NULL);
+    struct tm *local_time = localtime(&current_time);
+
+    if (local_time != NULL)
+    {
+        fprintf(log_file,
+                "[%04d-%02d-%02d %02d:%02d:%02d] %s\n",
+                local_time->tm_year + 1900,
+                local_time->tm_mon + 1,
+                local_time->tm_mday,
+                local_time->tm_hour,
+                local_time->tm_min,
+                local_time->tm_sec,
+                message);
+    }
+
+    fclose(log_file);
+}
+
 int recv_line(int sock_fd, char *buffer, size_t buffer_size)
 {
     size_t i = 0;
@@ -424,6 +454,7 @@ void *handle_client(void *arg)
     free(arg);
 
     printf("Controller connected successfully.\n");
+    write_log("Controller connected successfully.");
 
     int authenticated = 0;
 
@@ -459,6 +490,7 @@ void *handle_client(void *arg)
         authenticated = 1;
 
         printf("Controller authenticated successfully.\n");
+        write_log("Controller authenticated successfully.");
     }
     else if (strncmp(buffer, "AUTH ", 5) == 0)
     {
@@ -485,6 +517,9 @@ void *handle_client(void *arg)
 
     continue;
 }
+
+write_log(buffer);
+
         if (strcmp(buffer, "SYSINFO\n") == 0)
         {
             if (get_sysinfo(response, sizeof(response)) == 0)
@@ -705,6 +740,17 @@ if (strncmp(buffer, "PUT ", 4) == 0)
              SID);
 
     send_response(client_fd, response);
+
+    char log_message[256];
+
+    snprintf(log_message,
+         sizeof(log_message),
+         "PUT completed: %s (%llu bytes)",
+         filename,
+         filesize);
+
+    write_log(log_message);
+
     continue;
 }
 
@@ -836,6 +882,16 @@ if (strncmp(buffer, "GET ", 4) == 0)
         break;
     }
 
+char log_message[256];
+
+snprintf(log_message,
+         sizeof(log_message),
+         "GET completed: %s (%ld bytes)",
+         filename,
+         file_size);
+
+write_log(log_message);
+
     continue;
 }
 
@@ -896,6 +952,8 @@ if (strncmp(buffer, "GET ", 4) == 0)
             send_response(client_fd,
                           "OK MONITOR_STARTED SID:" SID "\n");
 
+			write_log("MONITOR STARTED");
+
             continue;
         }
 
@@ -913,6 +971,8 @@ if (strncmp(buffer, "GET ", 4) == 0)
 
             send_response(client_fd,
                           "OK MONITOR_STOPPED SID:" SID "\n");
+
+			write_log("MONITOR STOPPED");
 
             continue;
         }
@@ -944,6 +1004,8 @@ if (strncmp(buffer, "GET ", 4) == 0)
         pthread_join(monitor_thread, NULL);
         monitoring = 0;
     }
+
+    write_log("Controller disconnected.");
 
     close(client_fd);
 
