@@ -24,3 +24,24 @@
 [2026-10-07 14:53:59] QUIT
 
 [2026-10-07 14:53:59] Controller disconnected.
+[2026-10-07 15:31:59] Controller connected successfully.
+[2026-10-07 15:32:05] Controller authenticated successfully.
+[2026-10-07 15:32:12] PUT put_test.txt 37
+
+[2026-10-07 15:32:12] PUT completed: put_test.txt (37 bytes)
+[2026-10-07 15:33:00] GET put_test.txt
+
+[2026-10-07 15:33:00] GET completed: put_test.txt (37 bytes)
+[2026-10-07 15:34:22] QUIT
+
+[2026-10-07 15:34:22] Controller disconnected.
+[2026-10-07 15:37:00] Controller connected successfully.
+[2026-10-07 15:37:05] Controller authenticated successfully.
+[2026-10-07 15:37:10] AUTH OPS-0486
+
+[2026-10-07 15:37:17] GET put_test.txt
+
+[2026-10-07 15:37:17] GET completed: put_test.txt (37 bytes)
+[2026-10-07 15:37:31] QUIT
+
+[2026-10-07 15:37:31] Controller disconnected.

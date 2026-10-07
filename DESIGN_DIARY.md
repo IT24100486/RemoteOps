@@ -37,8 +37,14 @@ UDP monitoring was then implemented using a separate monitoring thread on the Ag
 
 During testing, `MONITOR STOP` initially did not behave correctly. The implementation was reviewed and debugged with AI assistance, including Claude, and the Controller/Agent interaction was corrected. Final testing confirmed that UDP reports stop successfully, TCP SYSINFO continues to work after stopping monitoring, and QUIT closes the session correctly.
 
+## 2026-10-07 — Logging, Throughput and Final Testing
+
+Implemented timestamped server-side logging and added PUT/GET transfer throughput as the selected optional extension. A 37-byte file was transferred successfully, with throughput reported in bytes/second. File integrity was verified using matching SHA-256 hashes and `cmp`.
+
+Final testing confirmed the mandatory TCP, file-transfer, concurrency, UDP monitoring and graceful disconnect features were working as intended.
+
 ## Current Design
 
 RemoteOps uses a TCP Agent/Controller architecture. The Agent accepts multiple Controllers concurrently using POSIX pthreads. TCP is used for authentication, commands and file transfer, while UDP is used for periodic monitoring reports. The implementation follows the assignment protocol and uses the personalised port, SID, authentication token and storage path throughout.
 
-**Current result: PASS — core TCP features, five-Controller concurrency and UDP monitoring have been implemented and tested.**
+**Current result: PASS — mandatory RemoteOps functionality and the selected throughput extension have been implemented and tested.**

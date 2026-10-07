@@ -13,6 +13,10 @@ This log records substantive AI interactions that materially contributed to the 
 | 2026-10-07 | ChatGPT | Helped implement UDP monitoring using `MONITOR START <udp_port>` and `MONITOR STOP`, including Agent monitoring and Controller UDP receiver threads. | Reviewed and adapted the implementation, compiled both programs successfully, tested periodic UDP system-statistic datagrams, verified the personalised SID, and tested TCP commands while monitoring was active. |
 | 2026-10-07 | Claude | Helped diagnose the `MONITOR STOP` problem during UDP monitoring testing. | Used the debugging suggestions to inspect the Controller/Agent interaction and identify the cause of the stop-handling issue. The implementation was corrected and then retested successfully. |
 | 2026-10-07 | ChatGPT | Helped review the final UDP implementation and verify the complete START → UDP reports → STOP → TCP command → QUIT workflow. | Performed a final functional test. UDP reports stopped after `MONITOR STOP`, `SYSINFO` continued to work, and the session ended successfully with `QUIT`. |
+| 2026-10-07 | ChatGPT | Helped implement server-side timestamped logging for connections, authentication, commands, file transfers, monitoring and disconnects. | Reviewed the changes, compiled the Agent successfully, and verified the personalised log output. |
+| 2026-10-07 | ChatGPT | Helped implement the optional transfer-throughput measurement for PUT and GET operations. | Added timing to the Controller, compiled successfully, and tested throughput reporting in bytes per second. |
+| 2026-10-07 | ChatGPT | Helped verify file-transfer integrity after the throughput implementation. | Compared the original and downloaded files using SHA-256 and `cmp`; both confirmed byte-for-byte equality. |
+| 2026-10-07 | ChatGPT | Reviewed the completed implementation against the assignment requirements and planned the final testing and submission evidence. | Confirmed that the mandatory features and selected throughput extension were complete and identified the remaining documentation, report, reflection and packaging tasks. |
 
 ## Future entries
 

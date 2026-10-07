@@ -93,6 +93,13 @@ int send_all(int sock_fd, const void *buffer, size_t length)
     return 0;
 }
 
+/* Calculate elapsed transfer time in seconds. */
+double elapsed_seconds(struct timeval start, struct timeval end)
+{
+    return (double)(end.tv_sec - start.tv_sec) +
+           (double)(end.tv_usec - start.tv_usec) / 1000000.0;
+}
+
 /*
  * Send a local file to the Agent using the PUT protocol.
  *
@@ -343,12 +350,29 @@ int main(void)
              * Send PUT header followed by exactly
              * the file contents.
              */
-            if (send_file(sock_fd, filename) != 0)
-            {
-                printf("File transfer failed.\n");
-                break;
-            }
+struct timeval transfer_start;
+struct timeval transfer_end;
 
+gettimeofday(&transfer_start, NULL);
+
+if (send_file(sock_fd, filename) != 0)
+{
+    printf("File transfer failed.\n");
+    break;
+}
+
+gettimeofday(&transfer_end, NULL);
+
+double transfer_time =
+    elapsed_seconds(transfer_start, transfer_end);
+
+double throughput = 0.0;
+
+if (transfer_time > 0.0)
+{
+    throughput =
+        (double)declared_filesize / transfer_time;
+}
             /*
              * Receive the Agent's response.
              */
@@ -363,6 +387,8 @@ int main(void)
             }
 
             printf("%s", buffer);
+
+	    printf("PUT throughput: %.2f bytes/sec\n", throughput);
 
             continue;
         }
@@ -463,6 +489,11 @@ int main(void)
                 break;
             }
 
+	    struct timeval transfer_start;
+	    struct timeval transfer_end;
+
+	    gettimeofday(&transfer_start, NULL);
+
             unsigned char file_buffer[4096];
             unsigned long long remaining = filesize;
             int transfer_success = 1;
@@ -537,15 +568,31 @@ int main(void)
 
             fclose(file);
 
-            if (!transfer_success)
-            {
-                remove(response_filename);
-                break;
-            }
+if (!transfer_success)
+{
+    remove(response_filename);
+    break;
+}
 
-            printf("File received successfully: %s (%llu bytes)\n",
-                   response_filename,
-                   filesize);
+gettimeofday(&transfer_end, NULL);
+
+double transfer_time =
+    elapsed_seconds(transfer_start, transfer_end);
+
+double throughput = 0.0;
+
+if (transfer_time > 0.0)
+{
+    throughput =
+        (double)filesize / transfer_time;
+}
+
+printf("File received successfully: %s (%llu bytes)\n",
+       response_filename,
+       filesize);
+
+printf("GET throughput: %.2f bytes/sec\n",
+       throughput);
 
             continue;
         }

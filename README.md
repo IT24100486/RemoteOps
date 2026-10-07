@@ -48,6 +48,10 @@ The following functionality has been implemented and tested:
 - Periodic system-statistic UDP datagrams containing SID:6840
 - TCP command operation during UDP monitoring
 - Successful UDP monitoring stop followed by normal TCP operation
+- Server-side timestamped activity logging
+- Connection, authentication, command, file-transfer and monitoring event logging
+- PUT and GET transfer throughput measurement in bytes per second
+- File-transfer integrity verification using SHA-256 and cmp
 
 ## Concurrency Model
 
@@ -107,6 +111,23 @@ Current completed development stages include:
 6. GET file download
 7. Concurrent Controller handling
 8. UDP monitoring
+9. Server-side logging
+10. Transfer throughput measurement
+11. Final file integrity and functional testing
+
+## Logging and Throughput
+
+The Agent records timestamped connections, authentication results,
+commands, file transfers, monitoring events and disconnects in:
+
+remoteops_IT24100486.log
+
+The Controller reports PUT and GET transfer throughput in bytes per
+second.
+
+File-transfer integrity was verified using SHA-256 hashes and the
+cmp command. The original and downloaded files produced identical
+hashes and no byte-level differences.
 
 ## Compilation
 
