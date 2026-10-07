@@ -8,6 +8,7 @@
 #include <sys/sysinfo.h>
 #include <sys/statvfs.h>
 #include <time.h>
+#include <signal.h>
 #include <pwd.h>
 #include <pthread.h>
 #include <stdatomic.h>
@@ -398,7 +399,9 @@ void *monitor_worker(void *arg)
                    sizeof(context->destination));
         }
 
-        sleep(5);
+         for (int i = 0; i < 5 && atomic_load(&context->active); i++)
+         sleep(1);
+
     }
 
     close(udp_fd);
@@ -844,7 +847,7 @@ if (strncmp(buffer, "GET ", 4) == 0)
                 udp_port < 1 || udp_port > 65535)
             {
                 send_response(client_fd,
-                              "ERR 003 INVALID_MONITOR_PORT SID:" SID);
+                              "ERR 003 INVALID_MONITOR_PORT SID:" SID "\n");
                 continue;
             }
 
@@ -866,7 +869,7 @@ if (strncmp(buffer, "GET ", 4) == 0)
             {
                 perror("getpeername");
                 send_response(client_fd,
-                              "ERR 003 MONITOR_SETUP_FAILED SID:" SID);
+                              "ERR 003 MONITOR_SETUP_FAILED SID:" SID "\n");
                 continue;
             }
 
@@ -884,14 +887,14 @@ if (strncmp(buffer, "GET ", 4) == 0)
                 atomic_store(&monitor.active, false);
 
                 send_response(client_fd,
-                              "ERR 003 MONITOR_SETUP_FAILED SID:" SID);
+                              "ERR 003 MONITOR_SETUP_FAILED SID:" SID "\n");
                 continue;
             }
 
             monitoring = 1;
 
             send_response(client_fd,
-                          "OK MONITOR_STARTED SID:" SID);
+                          "OK MONITOR_STARTED SID:" SID "\n");
 
             continue;
         }
@@ -954,6 +957,7 @@ int main(void)
     struct sockaddr_in server_addr;
     struct sockaddr_in client_addr;
     socklen_t client_len = sizeof(client_addr);
+    signal(SIGPIPE, SIG_IGN);
 
     server_fd = socket(AF_INET, SOCK_STREAM, 0);
 
