@@ -5,7 +5,10 @@
 #include <errno.h>
 #include <arpa/inet.h>
 #include <sys/socket.h>
+#include <sys/time.h>
 #include <sys/stat.h>
+#include <pthread.h>
+#include <stdint.h>
 
 #define SERVER_IP "127.0.0.1"
 #define PORT 9410
@@ -175,9 +178,54 @@ int send_file(int sock_fd, const char *filename)
     return 0;
 }
 
+typedef struct
+{
+    int udp_socket;
+    volatile int active;
+} monitor_context;
+
+void *monitor_receiver(void *arg)
+{
+    monitor_context *context = (monitor_context *)arg;
+
+    char buffer[256];
+
+    while (context->active)
+    {
+        ssize_t received = recvfrom(context->udp_socket,
+                                    buffer,
+                                    sizeof(buffer) - 1,
+                                    0,
+                                    NULL,
+                                    NULL);
+
+        if (received < 0)
+        {
+            if (!context->active)
+                break;
+
+            continue;
+        }
+
+        buffer[received] = '\0';
+
+        printf("\n[UDP] %s", buffer);
+        printf("RemoteOps> ");
+        fflush(stdout);
+    }
+
+    return NULL;
+}
+
 int main(void)
 {
     int sock_fd;
+
+    int udp_socket;
+    struct sockaddr_in udp_addr;
+    monitor_context monitor;
+    pthread_t monitor_thread;
+    int monitoring = 0;
 
     /*
      * Create TCP socket.
@@ -498,6 +546,143 @@ int main(void)
             printf("File received successfully: %s (%llu bytes)\n",
                    response_filename,
                    filesize);
+
+            continue;
+        }
+
+        /*
+         * Handle MONITOR START separately because
+         * the Controller must prepare a UDP socket
+         * before asking the Agent to start monitoring.
+         */
+        if (strncmp(buffer, "MONITOR START ", 14) == 0)
+        {
+            int udp_port;
+
+            if (sscanf(buffer + 14, "%d", &udp_port) != 1 ||
+                udp_port < 1 || udp_port > 65535)
+            {
+                printf("Usage: MONITOR START <udp_port>\n");
+                continue;
+            }
+
+            udp_socket = socket(AF_INET, SOCK_DGRAM, 0);
+
+            if (udp_socket < 0)
+            {
+                perror("UDP socket");
+                continue;
+            }
+
+            memset(&udp_addr, 0, sizeof(udp_addr));
+
+            udp_addr.sin_family = AF_INET;
+            udp_addr.sin_addr.s_addr = htonl(INADDR_ANY);
+            udp_addr.sin_port = htons((uint16_t)udp_port);
+
+            if (bind(udp_socket,
+                     (struct sockaddr *)&udp_addr,
+                     sizeof(udp_addr)) < 0)
+            {
+                perror("UDP bind");
+                close(udp_socket);
+                continue;
+            }
+
+	    struct timeval timeout;
+            timeout.tv_sec = 1;
+            timeout.tv_usec = 0;
+
+            setsockopt(udp_socket,
+                       SOL_SOCKET,
+                       SO_RCVTIMEO,
+                       &timeout,
+                       sizeof(timeout));
+
+            monitor.udp_socket = udp_socket;
+            monitor.active = 1;
+
+            if (pthread_create(&monitor_thread,
+                               NULL,
+                               monitor_receiver,
+                               &monitor) != 0)
+            {
+                perror("pthread_create");
+                monitor.active = 0;
+                close(udp_socket);
+                continue;
+            }
+
+	    monitoring = 1;
+
+            if (send_all(sock_fd,
+                         buffer,
+                         strlen(buffer)) != 0)
+            {
+                printf("Failed to send MONITOR START command.\n");
+                monitor.active = 0;
+                close(udp_socket);
+                pthread_join(monitor_thread, NULL);
+                break;
+            }
+
+            int result = recv_line(sock_fd,
+                                   buffer,
+                                   sizeof(buffer));
+
+            if (result <= 0)
+            {
+                printf("Connection closed by Agent.\n");
+                monitor.active = 0;
+                close(udp_socket);
+                pthread_join(monitor_thread, NULL);
+                break;
+            }
+
+            printf("%s", buffer);
+
+            continue;
+        }
+
+        if (strcmp(buffer, "MONITOR STOP\n") == 0)
+        {
+            /*
+             * Tell the Agent to stop monitoring first.
+             */
+
+	    printf("STOP BLOCK ENTERED\n");
+	    fflush(stdout);
+
+            if (send_all(sock_fd,
+                         buffer,
+                         strlen(buffer)) != 0)
+            {
+                printf("Failed to send MONITOR STOP command.\n");
+                break;
+            }
+
+            int result = recv_line(sock_fd,
+                                   buffer,
+                                   sizeof(buffer));
+
+            if (result <= 0)
+            {
+                printf("Connection closed by Agent.\n");
+                break;
+            }
+
+            printf("%s", buffer);
+
+            /*
+             * Now stop the local UDP receiver.
+             */
+            if (monitoring)
+            {
+                monitor.active = 0;
+                pthread_join(monitor_thread, NULL);
+                close(udp_socket);
+                monitoring = 0;
+            }
 
             continue;
         }

@@ -10,6 +10,8 @@
 #include <time.h>
 #include <pwd.h>
 #include <pthread.h>
+#include <stdatomic.h>
+#include <stdbool.h>
 
 #define PORT 9410
 #define AUTH_TOKEN "OPS-0486"
@@ -331,9 +333,86 @@ int execute_command(const char *command,
     return 1;
 }
 
+typedef struct
+{
+    struct sockaddr_in destination;
+    atomic_bool active;
+} monitor_context;
+
+void *monitor_worker(void *arg)
+{
+    monitor_context *context = (monitor_context *)arg;
+
+    int udp_fd = socket(AF_INET, SOCK_DGRAM, 0);
+
+    if (udp_fd < 0)
+    {
+        perror("UDP socket");
+        atomic_store(&context->active, false);
+        return NULL;
+    }
+
+    while (atomic_load(&context->active))
+    {
+        struct sysinfo info;
+
+        if (sysinfo(&info) == 0)
+        {
+            double cpu_load = 0.0;
+
+            FILE *load_file = fopen("/proc/loadavg", "r");
+
+            if (load_file != NULL)
+            {
+                fscanf(load_file, "%lf", &cpu_load);
+                fclose(load_file);
+            }
+
+            unsigned long long total_memory =
+                (unsigned long long)info.totalram * info.mem_unit;
+
+            unsigned long long free_memory =
+                (unsigned long long)info.freeram * info.mem_unit;
+
+            unsigned long long used_memory =
+                total_memory - free_memory;
+
+            unsigned long long used_memory_mb =
+                used_memory / (1024ULL * 1024ULL);
+
+            char message[256];
+
+            snprintf(message,
+                     sizeof(message),
+                     "MONITOR CPU:%.2f MEM:%llu UPTIME:%ld SID:%s\n",
+                     cpu_load,
+                     used_memory_mb,
+                     info.uptime,
+                     SID);
+
+            sendto(udp_fd,
+                   message,
+                   strlen(message),
+                   0,
+                   (struct sockaddr *)&context->destination,
+                   sizeof(context->destination));
+        }
+
+        sleep(5);
+    }
+
+    close(udp_fd);
+
+    return NULL;
+}
+
 void *handle_client(void *arg)
 {
     int client_fd = *(int *)arg;
+
+    pthread_t monitor_thread;
+    monitor_context monitor;
+    int monitoring = 0;
 
     char buffer[MAX_BUFFER];
     char response[MAX_BUFFER];
@@ -757,6 +836,84 @@ if (strncmp(buffer, "GET ", 4) == 0)
     continue;
 }
 
+        if (strncmp(buffer, "MONITOR START ", 14) == 0)
+        {
+            int udp_port;
+
+            if (sscanf(buffer + 14, "%d", &udp_port) != 1 ||
+                udp_port < 1 || udp_port > 65535)
+            {
+                send_response(client_fd,
+                              "ERR 003 INVALID_MONITOR_PORT SID:" SID);
+                continue;
+            }
+
+            if (monitoring)
+            {
+                atomic_store(&monitor.active, false);
+                pthread_join(monitor_thread, NULL);
+                monitoring = 0;
+            }
+
+            memset(&monitor, 0, sizeof(monitor_context));
+
+            struct sockaddr_in client_address;
+            socklen_t client_address_length = sizeof(client_address);
+
+            if (getpeername(client_fd,
+                            (struct sockaddr *)&client_address,
+                            &client_address_length) < 0)
+            {
+                perror("getpeername");
+                send_response(client_fd,
+                              "ERR 003 MONITOR_SETUP_FAILED SID:" SID);
+                continue;
+            }
+
+            monitor.destination.sin_family = AF_INET;
+            monitor.destination.sin_addr = client_address.sin_addr;
+            monitor.destination.sin_port = htons((uint16_t)udp_port);
+
+            atomic_init(&monitor.active, true);
+
+            if (pthread_create(&monitor_thread,
+                               NULL,
+                               monitor_worker,
+                               &monitor) != 0)
+            {
+                atomic_store(&monitor.active, false);
+
+                send_response(client_fd,
+                              "ERR 003 MONITOR_SETUP_FAILED SID:" SID);
+                continue;
+            }
+
+            monitoring = 1;
+
+            send_response(client_fd,
+                          "OK MONITOR_STARTED SID:" SID);
+
+            continue;
+        }
+
+        if (strcmp(buffer, "MONITOR STOP\n") == 0)
+        {
+	    printf("MONITOR STOP received.\n");
+	    fflush(stdout);
+
+            if (monitoring)
+            {
+                atomic_store(&monitor.active, false);
+                pthread_join(monitor_thread, NULL);
+                monitoring = 0;
+            }
+
+            send_response(client_fd,
+                          "OK MONITOR_STOPPED SID:" SID "\n");
+
+            continue;
+        }
+
        if (strcmp(buffer, "QUIT\n") == 0)
         {
             snprintf(response,
@@ -778,6 +935,12 @@ if (strncmp(buffer, "GET ", 4) == 0)
         send_response(client_fd, response);
     }
 
+ if (monitoring)
+    {
+        atomic_store(&monitor.active, false);
+        pthread_join(monitor_thread, NULL);
+        monitoring = 0;
+    }
 
     close(client_fd);
 
